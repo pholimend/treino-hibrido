@@ -15,16 +15,26 @@
   --radius:14px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Altura da barra fixa inferior (.acoes), SEM contar a safe-area — é
+     recalculada dinamicamente pelo app.js (ajustarEspacoRodape) assim que a
+     página carrega e sempre que a barra muda de tamanho. O valor abaixo é
+     só um fallback razoável para o instante antes do JS medir. */
+  --acoes-h: 74px;
+  --acoes-margin: 14px;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
-html,body{height:100%;}
+html{height:100%;}
 body{
+  min-height:100%;
   margin:0;
   background:var(--bg);
   color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   line-height:1.45;
-  padding-bottom: calc(78px + var(--safe-bottom));
+  /* Espaço para o conteúdo nunca ficar escondido atrás da barra fixa:
+     altura real da barra (medida em JS) + margem visual + safe-area do iOS.
+     Ver ajustarEspacoRodape() em app.js. */
+  padding-bottom: calc(var(--acoes-h) + var(--acoes-margin) + var(--safe-bottom));
   -webkit-font-smoothing:antialiased;
 }
 .mono, .stat-line b, .ex-tag, .badge-tipo{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}

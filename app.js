@@ -357,9 +357,42 @@ el('#btn-mais').addEventListener('click', abrirMais);
 el('#mais-fechar').addEventListener('click', fecharMais);
 el('#mais-backdrop').addEventListener('click', fecharMais);
 
+/* ---------------------- espaço reservado para a barra fixa inferior ---------------------- */
+/* Mede a altura real de .acoes (sem a safe-area, que é somada à parte na
+   fórmula do CSS) e atualiza --acoes-h, para que o padding-bottom do body
+   nunca fique curto nem sobre — funciona em qualquer tela, com qualquer
+   quantidade de conteúdo, sem valores fixos "no chute". */
+
+function medirSafeBottomPx() {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed; left:0; bottom:0; height:0; margin:0; border:0; padding:0; padding-bottom:env(safe-area-inset-bottom, 0px); visibility:hidden; pointer-events:none;';
+  document.body.appendChild(probe);
+  const px = probe.getBoundingClientRect().height;
+  probe.remove();
+  return px;
+}
+
+function ajustarEspacoRodape() {
+  const acoes = document.querySelector('.acoes');
+  if (!acoes) return;
+  const alturaTotal = acoes.getBoundingClientRect().height;
+  const safeBottom = medirSafeBottomPx();
+  const alturaSemSafeArea = Math.max(0, Math.round(alturaTotal - safeBottom));
+  document.documentElement.style.setProperty('--acoes-h', alturaSemSafeArea + 'px');
+}
+
+window.addEventListener('load', ajustarEspacoRodape);
+window.addEventListener('resize', ajustarEspacoRodape);
+window.addEventListener('orientationchange', ajustarEspacoRodape);
+if ('ResizeObserver' in window) {
+  const acoesEl = document.querySelector('.acoes');
+  if (acoesEl) new ResizeObserver(ajustarEspacoRodape).observe(acoesEl);
+}
+
 /* ---------------------- init ---------------------- */
 
 renderAll();
+ajustarEspacoRodape();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
