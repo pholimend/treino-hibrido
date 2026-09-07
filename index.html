@@ -20,26 +20,32 @@
 </head>
 <body>
 
-<header class="topbar">
-  <div class="topbar-row">
-    <h1>Treino Híbrido</h1>
-    <button id="btn-hoje" class="btn-hoje">Hoje</button>
+<div id="app-shell" class="app-shell">
+
+  <div id="scroll-region" class="scroll-region">
+    <header class="topbar">
+      <div class="topbar-row">
+        <h1>Treino Híbrido</h1>
+        <button id="btn-hoje" class="btn-hoje">Hoje</button>
+      </div>
+      <div id="contexto-atual" class="contexto"></div>
+    </header>
+
+    <nav id="bloco-seletor" class="bloco-seletor" aria-label="Selecionar bloco"></nav>
+    <div id="semana-seletor" class="semana-seletor" aria-label="Selecionar semana ou ciclo"></div>
+    <div id="dia-seletor" class="dia-seletor" aria-label="Selecionar dia"></div>
+
+    <main id="conteudo-dia" class="conteudo-dia"></main>
+
+    <div id="progresso-semana" class="progresso-semana"></div>
   </div>
-  <div id="contexto-atual" class="contexto"></div>
-</header>
 
-<nav id="bloco-seletor" class="bloco-seletor" aria-label="Selecionar bloco"></nav>
-<div id="semana-seletor" class="semana-seletor" aria-label="Selecionar semana ou ciclo"></div>
-<div id="dia-seletor" class="dia-seletor" aria-label="Selecionar dia"></div>
+  <footer class="acoes">
+    <button id="btn-concluido" class="btn-concluido"></button>
+    <button id="btn-mais" class="btn-mais">Mais ▾</button>
+  </footer>
 
-<main id="conteudo-dia" class="conteudo-dia"></main>
-
-<div id="progresso-semana" class="progresso-semana"></div>
-
-<footer class="acoes">
-  <button id="btn-concluido" class="btn-concluido"></button>
-  <button id="btn-mais" class="btn-mais">Mais ▾</button>
-</footer>
+</div>
 
 <div id="mais-backdrop" class="mais-backdrop"></div>
 <div id="mais-sheet" class="mais-sheet">
