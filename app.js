@@ -1174,21 +1174,74 @@ function fecharRetomada() {
   el('#retomada-backdrop').classList.remove('aberto');
 }
 
+/* ---------------------- navegação "←" das telas internas de Mais ---------------------- */
+/* Fecha a tela atual e volta um nível na hierarquia: para as telas sem
+   sub-estado interno, volta direto para a central "Mais"; para as que têm
+   sub-etapas (Meu peso: lista/form; Volta aos treinos: wizard), volta um
+   passo dentro da própria tela antes de voltar para "Mais". */
+
+function voltarInfo() {
+  fecharInfo();
+  abrirMais();
+}
+
+function voltarPeso() {
+  if (pesoView === 'form') {
+    pesoEditandoId = null;
+    pesoView = 'lista';
+    renderPeso();
+  } else {
+    fecharPeso();
+    abrirMais();
+  }
+}
+
+function voltarRetomadaHeader() {
+  if (retomadaView === 'etapa1') {
+    retomadaView = 'inicio';
+    renderRetomadaConteudo();
+  } else if (retomadaView === 'etapa2') {
+    retomadaView = 'etapa1';
+    renderRetomadaConteudo();
+  } else if (retomadaView === 'etapa3') {
+    retomadaView = 'etapa2';
+    renderRetomadaConteudo();
+  } else if (retomadaView === 'etapa4') {
+    retomadaView = 'etapa3';
+    renderRetomadaConteudo();
+  } else if (retomadaView === 'resultado') {
+    retomadaView = 'etapa4';
+    renderRetomadaConteudo();
+  } else {
+    fecharRetomada();
+    abrirMais();
+  }
+}
+
+function voltarBackup() {
+  fecharBackup();
+  abrirMais();
+}
+
 /* ---------------------- wiring dos sheets ---------------------- */
 
 el('#btn-mais').addEventListener('click', abrirMais);
 el('#mais-fechar').addEventListener('click', fecharMais);
 el('#mais-backdrop').addEventListener('click', fecharMais);
 
+el('#info-voltar').addEventListener('click', voltarInfo);
 el('#info-fechar').addEventListener('click', fecharInfo);
 el('#info-backdrop').addEventListener('click', fecharInfo);
 
+el('#peso-voltar').addEventListener('click', voltarPeso);
 el('#peso-fechar').addEventListener('click', fecharPeso);
 el('#peso-backdrop').addEventListener('click', fecharPeso);
 
+el('#retomada-voltar-header').addEventListener('click', voltarRetomadaHeader);
 el('#retomada-fechar').addEventListener('click', fecharRetomada);
 el('#retomada-backdrop').addEventListener('click', fecharRetomada);
 
+el('#backup-voltar').addEventListener('click', voltarBackup);
 el('#backup-fechar').addEventListener('click', fecharBackup);
 el('#backup-backdrop').addEventListener('click', fecharBackup);
 
