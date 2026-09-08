@@ -917,7 +917,7 @@ function renderRetomadaInicio() {
     html += `<div class="secao-titulo">Últimas retomadas</div>`;
     html += retomadasHistorico.slice(0, 15).map(r => `
       <details class="accordion">
-        <summary>${formatarDataCurta(r.data)} — ${r.dias} dia${r.dias === 1 ? '' : 's'} parado</summary>
+        <summary class="retomada-summary">${formatarDataCurta(r.data)} — ${r.dias} dia${r.dias === 1 ? '' : 's'} parado<button type="button" class="icon-btn retomada-excluir" data-id="${r.id}" aria-label="Excluir retomada">🗑️</button></summary>
         <div class="accordion-body">
           <p><b>Motivo:</b> ${labelMotivo(r.motivo)}</p>
           <p><b>Como estava:</b> ${labelEstado(r.estado)}</p>
@@ -1051,6 +1051,18 @@ function lerPosicaoFormularioEtapa4() {
 }
 
 function attachRetomadaHandlers() {
+  el('#retomada-conteudo').querySelectorAll('.retomada-excluir').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      if (!confirm('Excluir esta retomada?')) return;
+      retomadasHistorico = retomadasHistorico.filter(r => r.id !== id);
+      saveRetomadas();
+      renderRetomadaConteudo();
+    });
+  });
+
   const btnIniciar = el('#retomada-iniciar');
   if (btnIniciar) btnIniciar.addEventListener('click', () => {
     retomadaResp = {};

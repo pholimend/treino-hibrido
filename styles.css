@@ -274,6 +274,10 @@ button{font-family:inherit;}
   font-size:14px; width:32px; height:32px; border-radius:9px;
 }
 
+/* ---------- VOLTA AOS TREINOS — excluir retomada ---------- */
+.retomada-summary{position:relative; padding-right:40px;}
+.retomada-excluir{position:absolute; top:50%; right:0; transform:translateY(-50%);}
+
 @media (min-width:600px){
   .conteudo-dia, .mais-conteudo{max-width:480px; margin:0 auto;}
   .topbar-row, .contexto, .bloco-seletor, .semana-seletor, .dia-seletor, .progresso-semana, .acoes{max-width:480px; margin-left:auto; margin-right:auto;}
