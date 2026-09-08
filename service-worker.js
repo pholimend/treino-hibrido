@@ -1,4 +1,4 @@
-const CACHE_NAME = 'treino-hibrido-v2';
+const CACHE_NAME = 'treino-hibrido-v3-ui';
 const APP_SHELL = [
   './',
   './index.html',

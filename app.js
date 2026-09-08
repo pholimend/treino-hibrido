@@ -84,6 +84,7 @@ function exportarBackup() {
   localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
   const textoEl = el('#backup-ultimo-texto');
   if (textoEl) textoEl.textContent = textoUltimoBackup();
+  mostrarToast('✓ Backup criado');
 }
 
 /* Valida a estrutura ANTES de qualquer alteração nos dados atuais.
@@ -279,6 +280,30 @@ function resolverDia() {
 
 const el = sel => document.querySelector(sel);
 
+function uiIcon(nome, classe = '') {
+  const paths = {
+    peso: '<path d="M7.5 7.5a4.5 4.5 0 0 1 9 0"/><path d="M5 7.5h14l1.5 11h-17z"/><path d="M12 7.5l2.2-2.2"/>',
+    retorno: '<path d="M8 7H4v-4"/><path d="M4.5 7.5A8 8 0 1 1 4 14"/>',
+    backup: '<path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4"/><path d="M8 16h8"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/>',
+    chevron: '<path d="M9 6l6 6-6 6"/>',
+    editar: '<path d="M4 20l4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z"/><path d="M14.5 7.5l3 3"/>',
+    lixeira: '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5M14 11v5"/>',
+    check: '<path d="M5 12.5l4 4L19 7"/>',
+  };
+  return `<svg class="ui-icon ${classe}" viewBox="0 0 24 24" aria-hidden="true">${paths[nome] || ''}</svg>`;
+}
+
+let toastTimer = null;
+function mostrarToast(mensagem) {
+  const toast = el('#app-toast');
+  if (!toast) return;
+  toast.textContent = mensagem;
+  toast.classList.add('visivel');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('visivel'), 1800);
+}
+
 function renderBlocoSeletor() {
   const wrap = el('#bloco-seletor');
   wrap.innerHTML = '';
@@ -367,16 +392,19 @@ function tipoBadge(tipo) {
 }
 
 function renderExercicioCard(ex) {
-  const linhas = [];
-  linhas.push(`<div class="stat-line"><span>Séries</span><b>${ex.series ?? '—'}</b></div>`);
-  linhas.push(`<div class="stat-line"><span>Reps</span><b>${ex.reps ?? '—'}</b></div>`);
-  if (ex.rir) linhas.push(`<div class="stat-line"><span>RIR</span><b>${ex.rir}</b></div>`);
-  if (ex.descanso) linhas.push(`<div class="stat-line"><span>Descanso</span><b>${ex.descanso}</b></div>`);
+  const prescricao = `${ex.series ?? '—'} × ${ex.reps ?? '—'}`;
+  const detalhes = [];
+  if (ex.rir) detalhes.push(`<span><small>RIR</small><b>${ex.rir}</b></span>`);
+  if (ex.descanso) detalhes.push(`<span><small>Descanso</small><b>${ex.descanso}</b></span>`);
   return `
-    <div class="ex-card ${ex.principal === false ? 'acessorio' : (ex.principal ? 'principal' : '')}">
-      <div class="ex-nome">${ex.nome}${ex.principal !== undefined ? `<span class="ex-tag">${ex.principal ? 'principal' : 'acessório'}</span>` : ''}</div>
-      <div class="ex-stats">${linhas.join('')}</div>
-    </div>`;
+    <article class="ex-card ${ex.principal === false ? 'acessorio' : (ex.principal ? 'principal' : '')}">
+      <div class="ex-card-topo">
+        <div class="ex-nome">${ex.nome}</div>
+        ${ex.principal !== undefined ? `<span class="ex-tag">${ex.principal ? 'principal' : 'acessório'}</span>` : ''}
+      </div>
+      <div class="ex-prescricao">${prescricao}</div>
+      ${detalhes.length ? `<div class="ex-detalhes">${detalhes.join('')}</div>` : ''}
+    </article>`;
 }
 
 function renderForca(dados) {
@@ -458,7 +486,8 @@ function renderProgressoSemana() {
     return state.blocoId === 'b5' ? `b5-${state.cicloId}-${state.semanaCiclo}-${d.key}` : `${state.blocoId}-${state.semana}-${d.key}`;
   });
   const feitos = treinoKeys.filter(k => doneSet.has(k)).length;
-  wrap.textContent = `${feitos}/${treinoKeys.length} treinos concluídos nesta semana`;
+  const pct = treinoKeys.length ? Math.round((feitos / treinoKeys.length) * 100) : 0;
+  wrap.innerHTML = `<div class="progresso-meta"><span>Progresso da semana</span><b>${feitos}/${treinoKeys.length}</b></div><div class="progresso-track" aria-label="${pct}% concluído"><span style="width:${pct}%"></span></div>`;
 }
 
 function renderAll() {
@@ -479,6 +508,7 @@ el('#btn-concluido').addEventListener('click', () => {
   renderDiaSeletor();
   renderConteudoDia();
   renderProgressoSemana();
+  mostrarToast(doneSet.has(k) ? '✓ Treino concluído' : 'Treino desmarcado');
 });
 
 el('#btn-hoje').addEventListener('click', () => {
@@ -497,39 +527,39 @@ function renderMaisHub() {
     <div class="mais-grupo-titulo">Ferramentas</div>
     <div class="ferramenta-lista">
       <button class="ferramenta-item" id="ferramenta-peso">
-        <span class="ferramenta-icone">⚖️</span>
+        <span class="ferramenta-icone">${uiIcon('peso')}</span>
         <span class="ferramenta-texto">
           <span class="ferramenta-titulo">Meu peso</span>
           <span class="ferramenta-sub">Registre e acompanhe seu peso corporal</span>
         </span>
-        <span class="ferramenta-seta">›</span>
+        <span class="ferramenta-seta">${uiIcon('chevron')}</span>
       </button>
       <button class="ferramenta-item" id="ferramenta-retomada">
-        <span class="ferramenta-icone">↻</span>
+        <span class="ferramenta-icone">${uiIcon('retorno')}</span>
         <span class="ferramenta-texto">
           <span class="ferramenta-titulo">Volta aos treinos</span>
           <span class="ferramenta-sub">Orientação para retomar após uma pausa</span>
         </span>
-        <span class="ferramenta-seta">›</span>
+        <span class="ferramenta-seta">${uiIcon('chevron')}</span>
       </button>
       <button class="ferramenta-item" id="ferramenta-backup">
-        <span class="ferramenta-icone">💾</span>
+        <span class="ferramenta-icone">${uiIcon('backup')}</span>
         <span class="ferramenta-texto">
           <span class="ferramenta-titulo">Backup e dados</span>
           <span class="ferramenta-sub">Exporte ou restaure seus dados</span>
         </span>
-        <span class="ferramenta-seta">›</span>
+        <span class="ferramenta-seta">${uiIcon('chevron')}</span>
       </button>
     </div>
     <div class="mais-grupo-titulo">Sobre o treino</div>
     <div class="ferramenta-lista">
       <button class="ferramenta-item" id="ferramenta-info">
-        <span class="ferramenta-icone">ⓘ</span>
+        <span class="ferramenta-icone">${uiIcon('info')}</span>
         <span class="ferramenta-texto">
           <span class="ferramenta-titulo">Informações do plano</span>
           <span class="ferramenta-sub">Orientações e explicações sobre seu treinamento</span>
         </span>
-        <span class="ferramenta-seta">›</span>
+        <span class="ferramenta-seta">${uiIcon('chevron')}</span>
       </button>
     </div>`;
 
@@ -679,7 +709,7 @@ function renderPesoLista() {
       <div class="peso-destaque">${formatarPeso(ultimo.peso)} <span class="peso-unidade">kg</span></div>
       <div class="meta-mini">${formatarDataCurta(ultimo.data)}</div>`;
   } else {
-    html += `<p class="meta-mini">Nenhum registro de peso ainda.</p>`;
+    html += `<div class="empty-state"><div class="empty-icon">${uiIcon('peso')}</div><b>Ainda não há registros</b><span>Registre seu primeiro peso para começar a acompanhar sua evolução.</span></div>`;
   }
   html += `<button id="peso-registrar" class="btn-backup" style="width:100%; margin-top:12px;">Registrar peso</button>`;
 
@@ -692,8 +722,8 @@ function renderPesoLista() {
           <span class="peso-item-valor">${formatarPeso(r.peso)} kg</span>
         </div>
         <div class="peso-item-acoes">
-          <button class="icon-btn peso-editar" data-id="${r.id}" aria-label="Editar registro">✎</button>
-          <button class="icon-btn peso-excluir" data-id="${r.id}" aria-label="Excluir registro">🗑</button>
+          <button class="icon-btn peso-editar" data-id="${r.id}" aria-label="Editar registro">${uiIcon('editar')}</button>
+          <button class="icon-btn peso-excluir" data-id="${r.id}" aria-label="Excluir registro">${uiIcon('lixeira')}</button>
         </div>
       </div>`).join('') + '</div>';
   }
@@ -752,6 +782,7 @@ function attachPesoHandlers() {
     pesoEditandoId = null;
     pesoView = 'lista';
     renderPeso();
+    mostrarToast('✓ Peso salvo');
   });
 
   el('#peso-conteudo').querySelectorAll('.peso-editar').forEach(btn => {
@@ -769,6 +800,7 @@ function attachPesoHandlers() {
       pesoRegistros = pesoRegistros.filter(r => r.id !== id);
       savePeso();
       renderPeso();
+      mostrarToast('Registro excluído');
     });
   });
 }
@@ -914,10 +946,10 @@ function renderRetomadaInicio() {
     <button id="retomada-iniciar" class="btn-backup" style="width:100%; margin-top:6px;">Iniciar avaliação</button>`;
 
   if (retomadasHistorico.length) {
-    html += `<div class="secao-titulo">Últimas retomadas</div>`;
+    html += `<div class="secao-titulo">Últimas retomadas</div><div class="retomada-lista">`;
     html += retomadasHistorico.slice(0, 15).map(r => `
-      <details class="accordion">
-        <summary class="retomada-summary">${formatarDataCurta(r.data)} — ${r.dias} dia${r.dias === 1 ? '' : 's'} parado<button type="button" class="icon-btn retomada-excluir" data-id="${r.id}" aria-label="Excluir retomada">🗑️</button></summary>
+      <details class="accordion retomada-item">
+        <summary class="retomada-summary"><span class="retomada-resumo-texto"><b>${r.dias} dia${r.dias === 1 ? '' : 's'} parado</b><small>${formatarDataCurta(r.data)}</small></span><span class="retomada-chevron">${uiIcon('chevron')}</span><button type="button" class="icon-btn retomada-excluir" data-id="${r.id}" aria-label="Excluir retomada">${uiIcon('lixeira')}</button></summary>
         <div class="accordion-body">
           <p><b>Motivo:</b> ${labelMotivo(r.motivo)}</p>
           <p><b>Como estava:</b> ${labelEstado(r.estado)}</p>
@@ -926,6 +958,9 @@ function renderRetomadaInicio() {
           <p><b>Quando voltar à progressão normal:</b> ${r.recomendacao.quando}</p>
         </div>
       </details>`).join('');
+    html += `</div>`;
+  } else {
+    html += `<div class="empty-state compact"><div class="empty-icon">${uiIcon('retorno')}</div><b>Nenhuma retomada registrada</b><span>Quando precisar voltar após uma pausa, sua orientação ficará salva aqui.</span></div>`;
   }
   return html;
 }
@@ -1060,6 +1095,7 @@ function attachRetomadaHandlers() {
       retomadasHistorico = retomadasHistorico.filter(r => r.id !== id);
       saveRetomadas();
       renderRetomadaConteudo();
+      mostrarToast('Retomada excluída');
     });
   });
 
@@ -1172,6 +1208,7 @@ function attachRetomadaHandlers() {
     saveRetomadas();
     retomadaView = 'inicio';
     renderRetomadaConteudo();
+    mostrarToast('✓ Retomada salva');
   });
 }
 

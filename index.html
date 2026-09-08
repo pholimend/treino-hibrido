@@ -45,7 +45,7 @@
 <div id="mais-sheet" class="mais-sheet">
   <div class="mais-topo">
     <span>Mais</span>
-    <button id="mais-fechar" aria-label="Fechar">✕</button>
+    <button id="mais-fechar" class="topo-icon-btn" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div id="mais-conteudo" class="mais-conteudo"></div>
 </div>
@@ -53,9 +53,9 @@
 <div id="info-backdrop" class="mais-backdrop"></div>
 <div id="info-sheet" class="mais-sheet">
   <div class="mais-topo">
-    <button id="info-voltar" class="mais-topo-voltar" aria-label="Voltar">←</button>
+    <button id="info-voltar" class="mais-topo-voltar topo-icon-btn" aria-label="Voltar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span>Informações do plano</span>
-    <button id="info-fechar" aria-label="Fechar">✕</button>
+    <button id="info-fechar" class="topo-icon-btn" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div id="info-conteudo" class="mais-conteudo"></div>
 </div>
@@ -63,9 +63,9 @@
 <div id="peso-backdrop" class="mais-backdrop"></div>
 <div id="peso-sheet" class="mais-sheet">
   <div class="mais-topo">
-    <button id="peso-voltar" class="mais-topo-voltar" aria-label="Voltar">←</button>
+    <button id="peso-voltar" class="mais-topo-voltar topo-icon-btn" aria-label="Voltar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span>Meu peso</span>
-    <button id="peso-fechar" aria-label="Fechar">✕</button>
+    <button id="peso-fechar" class="topo-icon-btn" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div id="peso-conteudo" class="mais-conteudo"></div>
 </div>
@@ -73,9 +73,9 @@
 <div id="retomada-backdrop" class="mais-backdrop"></div>
 <div id="retomada-sheet" class="mais-sheet">
   <div class="mais-topo">
-    <button id="retomada-voltar-header" class="mais-topo-voltar" aria-label="Voltar">←</button>
+    <button id="retomada-voltar-header" class="mais-topo-voltar topo-icon-btn" aria-label="Voltar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span>Volta aos treinos</span>
-    <button id="retomada-fechar" aria-label="Fechar">✕</button>
+    <button id="retomada-fechar" class="topo-icon-btn" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div id="retomada-conteudo" class="mais-conteudo"></div>
 </div>
@@ -83,9 +83,9 @@
 <div id="backup-backdrop" class="mais-backdrop"></div>
 <div id="backup-sheet" class="mais-sheet">
   <div class="mais-topo">
-    <button id="backup-voltar" class="mais-topo-voltar" aria-label="Voltar">←</button>
+    <button id="backup-voltar" class="mais-topo-voltar topo-icon-btn" aria-label="Voltar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
     <span>Backup e dados</span>
-    <button id="backup-fechar" aria-label="Fechar">✕</button>
+    <button id="backup-fechar" class="topo-icon-btn" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div id="backup-conteudo" class="mais-conteudo"></div>
 </div>
@@ -94,7 +94,7 @@
 <div id="backup-preview-sheet" class="mais-sheet">
   <div class="mais-topo">
     <span>Restaurar backup</span>
-    <button id="backup-previa-fechar" aria-label="Fechar">✕</button>
+    <button id="backup-previa-fechar" class="topo-icon-btn" aria-label="Fechar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div id="backup-previa-conteudo" class="mais-conteudo"></div>
   <div class="backup-previa-acoes">
@@ -102,6 +102,8 @@
     <button id="backup-previa-restaurar" class="btn-backup btn-backup-perigo">Restaurar</button>
   </div>
 </div>
+
+<div id="app-toast" class="app-toast" role="status" aria-live="polite"></div>
 
 <script src="data.js"></script>
 <script src="app.js"></script>
