@@ -220,6 +220,60 @@ button{font-family:inherit;}
   border-top:1px solid var(--border);
 }
 
+/* ---------- CENTRAL "MAIS" (lista de ferramentas) ---------- */
+.mais-grupo-titulo{
+  font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--text-dim); margin:16px 4px 8px;
+}
+.mais-grupo-titulo:first-child{margin-top:4px;}
+.ferramenta-lista{display:flex; flex-direction:column; gap:8px;}
+.ferramenta-item{
+  display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:12px 14px;
+}
+.ferramenta-icone{font-size:20px; width:28px; text-align:center; flex-shrink:0;}
+.ferramenta-texto{display:flex; flex-direction:column; gap:2px; flex:1; min-width:0;}
+.ferramenta-titulo{font-size:14.5px; font-weight:600; color:var(--text);}
+.ferramenta-sub{font-size:12px; color:var(--text-dim);}
+.ferramenta-seta{color:var(--text-dim); font-size:18px; flex-shrink:0;}
+
+/* ---------- CAMPOS / WIZARD (Meu peso, Volta aos treinos) ---------- */
+.secao-titulo{font-size:13px; font-weight:700; margin:18px 0 8px; color:var(--text);}
+.campo-label{display:block; font-size:12px; color:var(--text-dim); margin:12px 0 6px;}
+.input-linha, .select-linha{
+  width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text);
+  font-size:15px; padding:12px 14px; border-radius:12px;
+}
+.wizard-topo{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+.wizard-passo{font-size:11.5px; color:var(--text-dim); font-weight:700; letter-spacing:.03em;}
+.wizard-voltar{background:none; border:none; color:var(--text-dim); font-size:14px; padding:4px 0;}
+.wizard-nav{display:flex; gap:8px; margin-top:16px;}
+
+.opcao-lista{display:flex; flex-direction:column; gap:8px; margin-top:4px;}
+.opcao-item{
+  text-align:left; width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text);
+  font-size:14px; font-weight:600; padding:13px 14px; border-radius:12px;
+}
+.opcao-item.selecionada{background:var(--strength-dim); color:var(--strength); border-color:#5A4626;}
+
+/* ---------- MEU PESO ---------- */
+.peso-destaque{font-size:32px; font-weight:700; letter-spacing:-0.02em;}
+.peso-unidade{font-size:16px; font-weight:600; color:var(--text-dim);}
+.peso-lista{display:flex; flex-direction:column; gap:8px;}
+.peso-item{
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:11px 14px;
+}
+.peso-item-info{display:flex; flex-direction:column; gap:2px;}
+.peso-item-data{font-size:11.5px; color:var(--text-dim);}
+.peso-item-valor{font-size:15px; font-weight:700;}
+.peso-item-acoes{display:flex; gap:4px;}
+.icon-btn{
+  background:var(--surface-alt); border:1px solid var(--border); color:var(--text-dim);
+  font-size:14px; width:32px; height:32px; border-radius:9px;
+}
+
 @media (min-width:600px){
   .conteudo-dia, .mais-conteudo{max-width:480px; margin:0 auto;}
   .topbar-row, .contexto, .bloco-seletor, .semana-seletor, .dia-seletor, .progresso-semana, .acoes{max-width:480px; margin-left:auto; margin-right:auto;}

@@ -6,14 +6,13 @@ const STORAGE_KEY = 'treinohibrido.state.v1';
 const DONE_KEY = 'treinohibrido.done.v1';
 
 /* ---------------------- backup / restauração ---------------------- */
-/* Chaves reservadas para históricos futuros (peso, musculação, corrida) e
-   configurações — ainda não usadas pelo app, mas já incluídas no backup
-   para que essas funcionalidades possam ser adicionadas depois sem exigir
-   migração. */
+/* Chave reservada para configurações futuras — ainda não usada pelo app,
+   mas já incluída no backup para não exigir migração quando existir. */
 const CONFIG_KEY = 'treinohibrido.config.v1';
 const PESO_KEY = 'treinohibrido.pesocorporal.v1';
 const MUSC_KEY = 'treinohibrido.musculacao.v1';
 const CORRIDA_KEY = 'treinohibrido.corrida.v1';
+const RETOMADAS_KEY = 'treinohibrido.retomadas.v1';
 const LAST_BACKUP_KEY = 'treinohibrido.lastbackup.v1';
 const PRE_RESTORE_KEY = 'treinohibrido.prerestore.v1';
 const BACKUP_APP_ID = 'treino-hibrido';
@@ -27,6 +26,10 @@ function safeParseJSON(raw, fallback) {
   try { return JSON.parse(raw); } catch (e) { return fallback; }
 }
 
+function gerarId(prefixo) {
+  return `${prefixo}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 /* Reúne TODO o estado persistente do app num único objeto de backup. */
 function coletarBackupData() {
   return {
@@ -37,9 +40,10 @@ function coletarBackupData() {
       programaAtual: JSON.parse(JSON.stringify(state)),
       treinosConcluidos: Array.from(doneSet),
       configuracoes: safeParseJSON(localStorage.getItem(CONFIG_KEY), {}),
-      pesoCorporal: safeParseJSON(localStorage.getItem(PESO_KEY), []),
+      pesoCorporal: JSON.parse(JSON.stringify(pesoRegistros)),
       musculacao: safeParseJSON(localStorage.getItem(MUSC_KEY), []),
       corrida: safeParseJSON(localStorage.getItem(CORRIDA_KEY), []),
+      historicoRetomadas: JSON.parse(JSON.stringify(retomadasHistorico)),
     },
   };
 }
@@ -49,6 +53,13 @@ function formatarDataHora(iso) {
   if (isNaN(dt.getTime())) return '—';
   const pad = n => String(n).padStart(2, '0');
   return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+function formatarDataCurta(iso) {
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return '—';
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()}`;
 }
 
 function textoUltimoBackup() {
@@ -71,10 +82,13 @@ function exportarBackup() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
-  renderMais();
+  const textoEl = el('#backup-ultimo-texto');
+  if (textoEl) textoEl.textContent = textoUltimoBackup();
 }
 
-/* Valida a estrutura ANTES de qualquer alteração nos dados atuais. */
+/* Valida a estrutura ANTES de qualquer alteração nos dados atuais.
+   Backups antigos (sem pesoCorporal/historicoRetomadas) continuam válidos —
+   esses campos são preenchidos com [] na restauração quando ausentes. */
 function validarBackup(obj) {
   if (!obj || typeof obj !== 'object') return 'Arquivo inválido.';
   if (obj.app !== BACKUP_APP_ID) return 'Este arquivo não é um backup do Treino Híbrido.';
@@ -107,6 +121,7 @@ function abrirPreviaBackup(obj) {
   linhas.push(`<div class="stat-line"><span>Programa</span><b>${labelProgramaAtual(d.programaAtual)}</b></div>`);
   linhas.push(`<div class="stat-line"><span>Treinos concluídos</span><b>${(d.treinosConcluidos || []).length}</b></div>`);
   if (Array.isArray(d.pesoCorporal)) linhas.push(`<div class="stat-line"><span>Registros de peso</span><b>${d.pesoCorporal.length}</b></div>`);
+  if (Array.isArray(d.historicoRetomadas)) linhas.push(`<div class="stat-line"><span>Retomadas registradas</span><b>${d.historicoRetomadas.length}</b></div>`);
   if (Array.isArray(d.musculacao)) linhas.push(`<div class="stat-line"><span>Registros de musculação</span><b>${d.musculacao.length}</b></div>`);
   if (Array.isArray(d.corrida)) linhas.push(`<div class="stat-line"><span>Registros de corrida</span><b>${d.corrida.length}</b></div>`);
 
@@ -139,6 +154,7 @@ function confirmarRestauracao() {
   localStorage.setItem(PESO_KEY, JSON.stringify(d.pesoCorporal || []));
   localStorage.setItem(MUSC_KEY, JSON.stringify(d.musculacao || []));
   localStorage.setItem(CORRIDA_KEY, JSON.stringify(d.corrida || []));
+  localStorage.setItem(RETOMADAS_KEY, JSON.stringify(d.historicoRetomadas || []));
 
   pendingBackupImport = null;
   location.reload();
@@ -164,6 +180,8 @@ function lidarComArquivoImportado(file) {
   reader.onerror = () => alert('Erro ao ler o arquivo selecionado.');
   reader.readAsText(file);
 }
+
+/* ---------------------- estado principal (programa / treinos concluídos) ---------------------- */
 
 function loadState() {
   try {
@@ -197,6 +215,26 @@ function hojeKey() {
 
 let state = loadState();
 let doneSet = loadDone();
+
+/* ---------------------- peso corporal ---------------------- */
+
+function loadPeso() {
+  return safeParseJSON(localStorage.getItem(PESO_KEY), []);
+}
+function savePeso() {
+  localStorage.setItem(PESO_KEY, JSON.stringify(pesoRegistros));
+}
+let pesoRegistros = loadPeso();
+
+/* ---------------------- histórico de retomadas ---------------------- */
+
+function loadRetomadas() {
+  return safeParseJSON(localStorage.getItem(RETOMADAS_KEY), []);
+}
+function saveRetomadas() {
+  localStorage.setItem(RETOMADAS_KEY, JSON.stringify(retomadasHistorico));
+}
+let retomadasHistorico = loadRetomadas();
 
 function doneKey() {
   if (state.blocoId === 'b5') return `b5-${state.cicloId}-${state.semanaCiclo}-${state.diaKey}`;
@@ -373,7 +411,7 @@ function renderCorrida(dados) {
   if (dados.nota) html += `<div class="callout cardio">${dados.nota}</div>`;
   (dados.criterios || []).forEach(c => { html += `<div class="callout alerta">${c}</div>`; });
   if (dados.criterios && dados.criterios.length === 0) {
-    html += `<div class="callout">Sem critério fixo de avanço — no Bloco 5 você escolhe o próximo ciclo conforme seu objetivo do momento (veja "Sobre este bloco" em Mais).</div>`;
+    html += `<div class="callout">Sem critério fixo de avanço — no Bloco 5 você escolhe o próximo ciclo conforme seu objetivo do momento (veja "Sobre este bloco" em Informações do plano).</div>`;
   }
   return html;
 }
@@ -449,9 +487,71 @@ el('#btn-hoje').addEventListener('click', () => {
   renderAll();
 });
 
-/* ---------------------- painel "Mais" (informações secundárias) ---------------------- */
+/* ========================================================================
+   "MAIS" — central de ferramentas
+   ======================================================================== */
 
-function conteudoMais() {
+function renderMaisHub() {
+  const wrap = el('#mais-conteudo');
+  wrap.innerHTML = `
+    <div class="mais-grupo-titulo">Ferramentas</div>
+    <div class="ferramenta-lista">
+      <button class="ferramenta-item" id="ferramenta-peso">
+        <span class="ferramenta-icone">⚖️</span>
+        <span class="ferramenta-texto">
+          <span class="ferramenta-titulo">Meu peso</span>
+          <span class="ferramenta-sub">Registre e acompanhe seu peso corporal</span>
+        </span>
+        <span class="ferramenta-seta">›</span>
+      </button>
+      <button class="ferramenta-item" id="ferramenta-retomada">
+        <span class="ferramenta-icone">↻</span>
+        <span class="ferramenta-texto">
+          <span class="ferramenta-titulo">Volta aos treinos</span>
+          <span class="ferramenta-sub">Orientação para retomar após uma pausa</span>
+        </span>
+        <span class="ferramenta-seta">›</span>
+      </button>
+      <button class="ferramenta-item" id="ferramenta-backup">
+        <span class="ferramenta-icone">💾</span>
+        <span class="ferramenta-texto">
+          <span class="ferramenta-titulo">Backup e dados</span>
+          <span class="ferramenta-sub">Exporte ou restaure seus dados</span>
+        </span>
+        <span class="ferramenta-seta">›</span>
+      </button>
+    </div>
+    <div class="mais-grupo-titulo">Sobre o treino</div>
+    <div class="ferramenta-lista">
+      <button class="ferramenta-item" id="ferramenta-info">
+        <span class="ferramenta-icone">ⓘ</span>
+        <span class="ferramenta-texto">
+          <span class="ferramenta-titulo">Informações do plano</span>
+          <span class="ferramenta-sub">Orientações e explicações sobre seu treinamento</span>
+        </span>
+        <span class="ferramenta-seta">›</span>
+      </button>
+    </div>`;
+
+  el('#ferramenta-peso').addEventListener('click', () => { fecharMais(); abrirPeso(); });
+  el('#ferramenta-retomada').addEventListener('click', () => { fecharMais(); abrirRetomada(); });
+  el('#ferramenta-backup').addEventListener('click', () => { fecharMais(); abrirBackup(); });
+  el('#ferramenta-info').addEventListener('click', () => { fecharMais(); abrirInfo(); });
+}
+
+function abrirMais() {
+  renderMaisHub();
+  el('#mais-sheet').classList.add('aberto');
+  el('#mais-backdrop').classList.add('aberto');
+}
+function fecharMais() {
+  el('#mais-sheet').classList.remove('aberto');
+  el('#mais-backdrop').classList.remove('aberto');
+}
+
+/* ---------------------- "Informações do plano" ---------------------- */
+
+function conteudoInfo() {
   const bloco = state.blocoId === 'b5' ? B5_META : BLOCKS.find(b => b.id === state.blocoId);
   const sections = [];
 
@@ -492,20 +592,42 @@ function conteudoMais() {
     html: '<ol>' + MARCOS.map(m => `<li>${m}</li>`).join('') + '</ol>',
   });
 
-  sections.push({
-    titulo: 'Backup e dados',
-    html: `
-      <p id="backup-ultimo-texto" class="meta-mini">${textoUltimoBackup()}</p>
-      <div class="backup-botoes">
-        <button id="btn-exportar-backup" class="btn-backup">Exportar backup</button>
-        <button id="btn-importar-backup" class="btn-backup btn-backup-secundario">Importar backup</button>
-      </div>
-      <input type="file" id="input-importar-backup" accept="application/json,.json" style="display:none">
-      <p class="accordion-body" style="margin-top:10px;">O backup gera um arquivo .json com todo o progresso salvo no aparelho. Guarde-o para transferir os dados para outro celular ou recuperar o app.</p>
-    `,
-  });
-
   return sections;
+}
+
+function renderInfo() {
+  const wrap = el('#info-conteudo');
+  wrap.innerHTML = conteudoInfo().map((s, i) => `
+    <details class="accordion" ${i === 0 ? 'open' : ''}>
+      <summary>${s.titulo}</summary>
+      <div class="accordion-body">${s.html}</div>
+    </details>`).join('');
+}
+
+function abrirInfo() {
+  renderInfo();
+  el('#info-sheet').classList.add('aberto');
+  el('#info-backdrop').classList.add('aberto');
+}
+function fecharInfo() {
+  el('#info-sheet').classList.remove('aberto');
+  el('#info-backdrop').classList.remove('aberto');
+}
+
+/* ---------------------- "Backup e dados" ---------------------- */
+
+function renderBackup() {
+  const wrap = el('#backup-conteudo');
+  wrap.innerHTML = `
+    <p id="backup-ultimo-texto" class="meta-mini">${textoUltimoBackup()}</p>
+    <div class="backup-botoes">
+      <button id="btn-exportar-backup" class="btn-backup">Exportar backup</button>
+      <button id="btn-importar-backup" class="btn-backup btn-backup-secundario">Importar backup</button>
+    </div>
+    <input type="file" id="input-importar-backup" accept="application/json,.json" style="display:none">
+    <p class="meta-mini" style="margin-top:14px;">O backup gera um arquivo .json com todo o progresso salvo no aparelho: programa atual, treinos concluídos, peso corporal e histórico de retomadas. Guarde-o para transferir os dados para outro celular ou recuperar o app.</p>
+  `;
+  attachBackupHandlers();
 }
 
 function attachBackupHandlers() {
@@ -522,30 +644,554 @@ function attachBackupHandlers() {
   }
 }
 
-function renderMais() {
-  const wrap = el('#mais-conteudo');
-  wrap.innerHTML = conteudoMais().map((s, i) => `
-    <details class="accordion" ${i === 0 ? 'open' : ''}>
-      <summary>${s.titulo}</summary>
-      <div class="accordion-body">${s.html}</div>
-    </details>`).join('');
-  attachBackupHandlers();
+function abrirBackup() {
+  renderBackup();
+  el('#backup-sheet').classList.add('aberto');
+  el('#backup-backdrop').classList.add('aberto');
+}
+function fecharBackup() {
+  el('#backup-sheet').classList.remove('aberto');
+  el('#backup-backdrop').classList.remove('aberto');
 }
 
-function abrirMais() {
-  renderMais();
-  el('#mais-sheet').classList.add('aberto');
-  el('#mais-backdrop').classList.add('aberto');
+/* ========================================================================
+   "MEU PESO"
+   ======================================================================== */
+
+let pesoView = 'lista'; // 'lista' | 'form'
+let pesoEditandoId = null;
+
+function pesoOrdenado() {
+  return [...pesoRegistros].sort((a, b) => new Date(b.data) - new Date(a.data));
 }
-function fecharMais() {
-  el('#mais-sheet').classList.remove('aberto');
-  el('#mais-backdrop').classList.remove('aberto');
+
+function formatarPeso(n) {
+  return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
+
+function renderPesoLista() {
+  const ordenado = pesoOrdenado();
+  const ultimo = ordenado[0];
+  let html = '';
+  if (ultimo) {
+    html += `
+      <p class="meta-mini" style="margin-bottom:2px;">Último registro</p>
+      <div class="peso-destaque">${formatarPeso(ultimo.peso)} <span class="peso-unidade">kg</span></div>
+      <div class="meta-mini">${formatarDataCurta(ultimo.data)}</div>`;
+  } else {
+    html += `<p class="meta-mini">Nenhum registro de peso ainda.</p>`;
+  }
+  html += `<button id="peso-registrar" class="btn-backup" style="width:100%; margin-top:12px;">Registrar peso</button>`;
+
+  if (ordenado.length) {
+    html += `<div class="secao-titulo">Histórico</div>`;
+    html += '<div class="peso-lista">' + ordenado.map(r => `
+      <div class="peso-item">
+        <div class="peso-item-info">
+          <span class="peso-item-data">${formatarDataCurta(r.data)}</span>
+          <span class="peso-item-valor">${formatarPeso(r.peso)} kg</span>
+        </div>
+        <div class="peso-item-acoes">
+          <button class="icon-btn peso-editar" data-id="${r.id}" aria-label="Editar registro">✎</button>
+          <button class="icon-btn peso-excluir" data-id="${r.id}" aria-label="Excluir registro">🗑</button>
+        </div>
+      </div>`).join('') + '</div>';
+  }
+  return html;
+}
+
+function renderPesoForm() {
+  const registro = pesoEditandoId ? pesoRegistros.find(r => r.id === pesoEditandoId) : null;
+  const valorAtual = registro ? String(registro.peso).replace('.', ',') : '';
+  return `
+    <h3 class="dia-titulo" style="font-size:17px;">${registro ? 'Editar registro' : 'Registrar peso'}</h3>
+    <label class="campo-label">Peso (kg)</label>
+    <input type="text" inputmode="decimal" id="peso-input" class="input-linha" placeholder="Ex.: 83,5" value="${valorAtual}">
+    <div class="wizard-nav">
+      <button class="btn-backup btn-backup-secundario" id="peso-cancelar">Cancelar</button>
+      <button class="btn-backup" id="peso-salvar">Salvar</button>
+    </div>`;
+}
+
+function renderPeso() {
+  const wrap = el('#peso-conteudo');
+  wrap.innerHTML = pesoView === 'form' ? renderPesoForm() : renderPesoLista();
+  attachPesoHandlers();
+}
+
+function attachPesoHandlers() {
+  const btnRegistrar = el('#peso-registrar');
+  if (btnRegistrar) btnRegistrar.addEventListener('click', () => {
+    pesoEditandoId = null;
+    pesoView = 'form';
+    renderPeso();
+  });
+
+  const btnCancelar = el('#peso-cancelar');
+  if (btnCancelar) btnCancelar.addEventListener('click', () => {
+    pesoView = 'lista';
+    renderPeso();
+  });
+
+  const btnSalvar = el('#peso-salvar');
+  if (btnSalvar) btnSalvar.addEventListener('click', () => {
+    const input = el('#peso-input');
+    const valor = parseFloat((input.value || '').replace(',', '.'));
+    if (isNaN(valor) || valor <= 0 || valor > 400) {
+      alert('Informe um peso válido em kg.');
+      return;
+    }
+    const arredondado = Math.round(valor * 10) / 10;
+    if (pesoEditandoId) {
+      const registro = pesoRegistros.find(r => r.id === pesoEditandoId);
+      if (registro) registro.peso = arredondado;
+    } else {
+      pesoRegistros.push({ id: gerarId('peso'), data: new Date().toISOString(), peso: arredondado });
+    }
+    savePeso();
+    pesoEditandoId = null;
+    pesoView = 'lista';
+    renderPeso();
+  });
+
+  el('#peso-conteudo').querySelectorAll('.peso-editar').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pesoEditandoId = btn.dataset.id;
+      pesoView = 'form';
+      renderPeso();
+    });
+  });
+
+  el('#peso-conteudo').querySelectorAll('.peso-excluir').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      if (!confirm('Excluir este registro de peso?')) return;
+      pesoRegistros = pesoRegistros.filter(r => r.id !== id);
+      savePeso();
+      renderPeso();
+    });
+  });
+}
+
+function abrirPeso() {
+  pesoView = 'lista';
+  pesoEditandoId = null;
+  renderPeso();
+  el('#peso-sheet').classList.add('aberto');
+  el('#peso-backdrop').classList.add('aberto');
+}
+function fecharPeso() {
+  el('#peso-sheet').classList.remove('aberto');
+  el('#peso-backdrop').classList.remove('aberto');
+}
+
+/* ========================================================================
+   "VOLTA AOS TREINOS"
+   ======================================================================== */
+
+const MOTIVOS_RETOMADA = [
+  { id: 'tempo', label: 'Falta de tempo/rotina' },
+  { id: 'viagem', label: 'Viagem' },
+  { id: 'desanimo', label: 'Desânimo' },
+  { id: 'doenca', label: 'Doença' },
+  { id: 'dor', label: 'Dor ou lesão' },
+  { id: 'outro', label: 'Outro' },
+];
+
+const ESTADOS_RETOMADA = [
+  { id: 'disposto', label: 'Estou bem e disposto' },
+  { id: 'destreinado', label: 'Estou bem, mas me sinto destreinado' },
+  { id: 'cansado', label: 'Ainda estou cansado/indisposto' },
+  { id: 'dor', label: 'Ainda tenho dor ou limitação' },
+];
+
+function labelMotivo(id) {
+  const m = MOTIVOS_RETOMADA.find(x => x.id === id);
+  return m ? m.label : '—';
+}
+function labelEstado(id) {
+  const e = ESTADOS_RETOMADA.find(x => x.id === id);
+  return e ? e.label : '—';
+}
+
+function posicaoAtualPrograma() {
+  return {
+    blocoId: state.blocoId,
+    semana: state.semana,
+    cicloId: state.cicloId,
+    semanaCiclo: state.semanaCiclo,
+    diaKey: state.diaKey,
+  };
+}
+
+function faixaPorDias(dias) {
+  if (dias <= 5) return 'a';
+  if (dias <= 10) return 'b';
+  if (dias <= 20) return 'c';
+  if (dias <= 35) return 'd';
+  return 'e';
+}
+
+/* Regras conservadoras e qualitativas — sem falsa precisão matemática.
+   A posição confirmada pelo usuário é usada como referência textual. */
+function recomendacaoBase(faixa, posicaoLabel) {
+  const tabela = {
+    a: {
+      onde: `Continue de onde parou (${posicaoLabel}).`,
+      como: 'Sem necessidade de regressão — treine normalmente, prestando atenção a como o corpo responde.',
+      quando: 'A progressão normal já vale a partir de hoje.',
+    },
+    b: {
+      onde: `Continue no ponto em que parou (${posicaoLabel}), ou repita a semana atual se preferir mais segurança.`,
+      como: 'Torne a primeira sessão um pouco mais conservadora e evite tentar compensar os treinos perdidos.',
+      quando: 'Depois de um treino bem tolerado, retome a progressão normalmente.',
+    },
+    c: {
+      onde: `Antes de seguir a partir de ${posicaoLabel}, faça 1–2 sessões de readaptação.`,
+      como: 'Reduza temporariamente carga, intensidade e volume nessas sessões de readaptação.',
+      quando: 'Se estiver tolerando bem, volte ao programa normal depois dessas sessões.',
+    },
+    d: {
+      onde: `Em vez de retomar direto em ${posicaoLabel}, volte cerca de uma semana ou etapa antes desse ponto.`,
+      como: 'Deixe os primeiros treinos mais leves do que o habitual.',
+      quando: 'Progrida de novo aos poucos, conforme a tolerância do seu corpo.',
+    },
+    e: {
+      onde: `Em vez de voltar direto em ${posicaoLabel}, considere retomar por uma etapa anterior de adaptação do programa.`,
+      como: 'Retomada bem gradual, com carga e intensidade reduzidas nas primeiras semanas.',
+      quando: 'Sem prazo fixo — avance apenas conforme perceber boa tolerância, sessão após sessão.',
+    },
+  };
+  return tabela[faixa];
+}
+
+function calcularRecomendacaoRetomada({ dias, motivo, estado, posicao }) {
+  const posicaoLabel = labelProgramaAtual(posicao);
+
+  // Caminho de alerta: dor/lesão sempre tem prioridade sobre as demais regras.
+  if (motivo === 'dor' || estado === 'dor') {
+    return {
+      nivel: 'alerta',
+      onde: `Não é possível indicar com segurança onde retomar sem avaliação (posição informada: ${posicaoLabel}).`,
+      como: 'Evite treinar com dor ou limitação. Esta ferramenta não substitui avaliação profissional.',
+      quando: 'Procure orientação de um profissional de saúde (educador físico e/ou médico) antes de retomar, principalmente se a dor for persistente.',
+    };
+  }
+
+  const faixa = faixaPorDias(dias);
+  const base = recomendacaoBase(faixa, posicaoLabel);
+  const notas = [];
+  let nivel = 'normal';
+
+  if (motivo === 'doenca') {
+    notas.push('Como o motivo foi doença, retome apenas quando os sintomas tiverem passado completamente.');
+    nivel = 'atencao';
+  }
+  if (estado === 'destreinado') {
+    notas.push('Como você se sente destreinado, trate a retomada com um pouco mais de cautela do que o habitual para esse tempo de pausa.');
+    if (nivel === 'normal') nivel = 'atencao';
+  }
+  if (estado === 'cansado') {
+    notas.push('Priorize a recuperação: não busque progredir nos próximos treinos, apenas retome o movimento com calma.');
+    nivel = 'atencao';
+  }
+
+  return {
+    nivel,
+    onde: base.onde,
+    como: notas.length ? `${base.como} ${notas.join(' ')}` : base.como,
+    quando: base.quando,
+  };
+}
+
+let retomadaView = 'inicio'; // 'inicio' | 'etapa1'..'etapa4' | 'resultado'
+let retomadaResp = {};
+let retomadaResultadoAtual = null;
+
+function renderRetomadaInicio() {
+  let html = `
+    <p class="meta-mini">Ferramenta simples para orientar sua retomada após alguns dias sem treinar. Não substitui avaliação profissional.</p>
+    <button id="retomada-iniciar" class="btn-backup" style="width:100%; margin-top:6px;">Iniciar avaliação</button>`;
+
+  if (retomadasHistorico.length) {
+    html += `<div class="secao-titulo">Últimas retomadas</div>`;
+    html += retomadasHistorico.slice(0, 15).map(r => `
+      <details class="accordion">
+        <summary>${formatarDataCurta(r.data)} — ${r.dias} dia${r.dias === 1 ? '' : 's'} parado</summary>
+        <div class="accordion-body">
+          <p><b>Motivo:</b> ${labelMotivo(r.motivo)}</p>
+          <p><b>Como estava:</b> ${labelEstado(r.estado)}</p>
+          <p><b>Onde retomar:</b> ${r.recomendacao.onde}</p>
+          <p><b>Como fazer os primeiros treinos:</b> ${r.recomendacao.como}</p>
+          <p><b>Quando voltar à progressão normal:</b> ${r.recomendacao.quando}</p>
+        </div>
+      </details>`).join('');
+  }
+  return html;
+}
+
+function renderRetomadaEtapa1() {
+  return `
+    <div class="wizard-topo"><span class="wizard-passo">Etapa 1 de 4</span></div>
+    <h3 class="dia-titulo" style="font-size:17px;">Há quantos dias você está sem treinar?</h3>
+    <input type="number" id="retomada-dias" inputmode="numeric" min="0" class="input-linha" placeholder="Número de dias" value="${retomadaResp.dias ?? ''}">
+    <div class="wizard-nav">
+      <button class="btn-backup btn-backup-secundario" id="retomada-cancelar-etapa1">Cancelar</button>
+      <button class="btn-backup" id="retomada-ir-etapa2">Continuar</button>
+    </div>`;
+}
+
+function opcaoListaHTML(options, grupo, selecionadoId) {
+  return options.map(o => `<button class="opcao-item${selecionadoId === o.id ? ' selecionada' : ''}" data-grupo="${grupo}" data-valor="${o.id}">${o.label}</button>`).join('');
+}
+
+function renderRetomadaEtapa2() {
+  return `
+    <div class="wizard-topo">
+      <button class="wizard-voltar" id="retomada-voltar-etapa1">‹ Voltar</button>
+      <span class="wizard-passo">Etapa 2 de 4</span>
+    </div>
+    <h3 class="dia-titulo" style="font-size:17px;">Qual o motivo da pausa?</h3>
+    <div class="opcao-lista">${opcaoListaHTML(MOTIVOS_RETOMADA, 'motivo', retomadaResp.motivo)}</div>`;
+}
+
+function renderRetomadaEtapa3() {
+  return `
+    <div class="wizard-topo">
+      <button class="wizard-voltar" id="retomada-voltar-etapa2">‹ Voltar</button>
+      <span class="wizard-passo">Etapa 3 de 4</span>
+    </div>
+    <h3 class="dia-titulo" style="font-size:17px;">Como você está hoje?</h3>
+    <div class="opcao-lista">${opcaoListaHTML(ESTADOS_RETOMADA, 'estado', retomadaResp.estado)}</div>`;
+}
+
+function renderRetomadaEtapa4() {
+  const posicao = retomadaResp.posicao || posicaoAtualPrograma();
+  const isB5 = posicao.blocoId === 'b5';
+  const blocoOptions = BLOCKS.concat([B5_META]).map(b => `<option value="${b.id}" ${posicao.blocoId === b.id ? 'selected' : ''}>Bloco ${b.numero} — ${b.nome}</option>`).join('');
+
+  let extraHTML;
+  if (isB5) {
+    const cicloOptions = B5_CICLOS.map(c => `<option value="${c.id}" ${posicao.cicloId === c.id ? 'selected' : ''}>${c.nome}</option>`).join('');
+    const semanaCicloOptions = range(1, 7).map(n => `<option value="${n}" ${posicao.semanaCiclo === n ? 'selected' : ''}>${n === 7 ? 'Deload' : 'Semana ' + n}</option>`).join('');
+    extraHTML = `
+      <label class="campo-label">Ciclo</label>
+      <select id="retomada-ciclo" class="select-linha">${cicloOptions}</select>
+      <label class="campo-label">Semana do ciclo</label>
+      <select id="retomada-semanaciclo" class="select-linha">${semanaCicloOptions}</select>`;
+  } else {
+    const bloco = BLOCKS.find(b => b.id === posicao.blocoId) || BLOCKS[0];
+    const semanaOptions = bloco.semanas.map(n => `<option value="${n}" ${posicao.semana === n ? 'selected' : ''}>Semana ${n}</option>`).join('');
+    extraHTML = `
+      <label class="campo-label">Semana</label>
+      <select id="retomada-semana" class="select-linha">${semanaOptions}</select>`;
+  }
+
+  const diaOptions = WEEKDAYS.map(d => `<option value="${d.key}" ${posicao.diaKey === d.key ? 'selected' : ''}>${d.full}</option>`).join('');
+
+  return `
+    <div class="wizard-topo">
+      <button class="wizard-voltar" id="retomada-voltar-etapa3">‹ Voltar</button>
+      <span class="wizard-passo">Etapa 4 de 4</span>
+    </div>
+    <h3 class="dia-titulo" style="font-size:17px;">Confirme onde você parou no programa</h3>
+    <p class="meta-mini">Preenchido automaticamente com sua posição atual. Ajuste se necessário.</p>
+    <label class="campo-label">Bloco</label>
+    <select id="retomada-bloco" class="select-linha">${blocoOptions}</select>
+    <div id="retomada-campos-extra">${extraHTML}</div>
+    <label class="campo-label">Dia de referência</label>
+    <select id="retomada-dia" class="select-linha">${diaOptions}</select>
+    <div class="wizard-nav">
+      <button class="btn-backup btn-backup-secundario" id="retomada-voltar-etapa3b">Voltar</button>
+      <button class="btn-backup" id="retomada-ver-resultado">Ver recomendação</button>
+    </div>`;
+}
+
+function renderRetomadaResultado() {
+  const r = retomadaResultadoAtual;
+  const classeNivel = r.nivel === 'alerta' ? 'alerta' : (r.nivel === 'atencao' ? 'cardio' : '');
+  return `
+    <div class="wizard-topo">
+      <button class="wizard-voltar" id="retomada-voltar-etapa4">‹ Voltar</button>
+      <span class="wizard-passo">Resultado</span>
+    </div>
+    <div class="callout ${classeNivel}"><b>Onde retomar</b><br>${r.onde}</div>
+    <div class="callout ${classeNivel}"><b>Como fazer os primeiros treinos</b><br>${r.como}</div>
+    <div class="callout ${classeNivel}"><b>Quando voltar à progressão normal</b><br>${r.quando}</div>
+    <button id="retomada-marcar" class="btn-backup" style="width:100%; margin-top:14px;">Marcar como retomado</button>`;
+}
+
+function renderRetomadaConteudo() {
+  const wrap = el('#retomada-conteudo');
+  if (retomadaView === 'etapa1') wrap.innerHTML = renderRetomadaEtapa1();
+  else if (retomadaView === 'etapa2') wrap.innerHTML = renderRetomadaEtapa2();
+  else if (retomadaView === 'etapa3') wrap.innerHTML = renderRetomadaEtapa3();
+  else if (retomadaView === 'etapa4') wrap.innerHTML = renderRetomadaEtapa4();
+  else if (retomadaView === 'resultado') wrap.innerHTML = renderRetomadaResultado();
+  else wrap.innerHTML = renderRetomadaInicio();
+  attachRetomadaHandlers();
+}
+
+function lerPosicaoFormularioEtapa4() {
+  const blocoId = el('#retomada-bloco').value;
+  const diaKey = el('#retomada-dia').value;
+  if (blocoId === 'b5') {
+    return {
+      blocoId,
+      cicloId: el('#retomada-ciclo').value,
+      semanaCiclo: parseInt(el('#retomada-semanaciclo').value, 10),
+      diaKey,
+    };
+  }
+  return {
+    blocoId,
+    semana: parseInt(el('#retomada-semana').value, 10),
+    diaKey,
+  };
+}
+
+function attachRetomadaHandlers() {
+  const btnIniciar = el('#retomada-iniciar');
+  if (btnIniciar) btnIniciar.addEventListener('click', () => {
+    retomadaResp = {};
+    retomadaView = 'etapa1';
+    renderRetomadaConteudo();
+  });
+
+  const btnCancelarEtapa1 = el('#retomada-cancelar-etapa1');
+  if (btnCancelarEtapa1) btnCancelarEtapa1.addEventListener('click', () => {
+    retomadaView = 'inicio';
+    renderRetomadaConteudo();
+  });
+
+  const btnIrEtapa2 = el('#retomada-ir-etapa2');
+  if (btnIrEtapa2) btnIrEtapa2.addEventListener('click', () => {
+    const input = el('#retomada-dias');
+    const dias = parseInt(input.value, 10);
+    if (isNaN(dias) || dias < 0) {
+      alert('Informe um número de dias válido.');
+      return;
+    }
+    retomadaResp.dias = dias;
+    retomadaView = 'etapa2';
+    renderRetomadaConteudo();
+  });
+
+  const btnVoltarEtapa1 = el('#retomada-voltar-etapa1');
+  if (btnVoltarEtapa1) btnVoltarEtapa1.addEventListener('click', () => {
+    retomadaView = 'etapa1';
+    renderRetomadaConteudo();
+  });
+
+  el('#retomada-conteudo').querySelectorAll('.opcao-item[data-grupo="motivo"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      retomadaResp.motivo = btn.dataset.valor;
+      retomadaView = 'etapa3';
+      renderRetomadaConteudo();
+    });
+  });
+
+  const btnVoltarEtapa2 = el('#retomada-voltar-etapa2');
+  if (btnVoltarEtapa2) btnVoltarEtapa2.addEventListener('click', () => {
+    retomadaView = 'etapa2';
+    renderRetomadaConteudo();
+  });
+
+  el('#retomada-conteudo').querySelectorAll('.opcao-item[data-grupo="estado"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      retomadaResp.estado = btn.dataset.valor;
+      if (!retomadaResp.posicao) retomadaResp.posicao = posicaoAtualPrograma();
+      retomadaView = 'etapa4';
+      renderRetomadaConteudo();
+    });
+  });
+
+  const btnVoltarEtapa3 = el('#retomada-voltar-etapa3');
+  if (btnVoltarEtapa3) btnVoltarEtapa3.addEventListener('click', () => {
+    retomadaView = 'etapa3';
+    renderRetomadaConteudo();
+  });
+
+  const selBloco = el('#retomada-bloco');
+  if (selBloco) selBloco.addEventListener('change', () => {
+    const diaAtual = el('#retomada-dia') ? el('#retomada-dia').value : posicaoAtualPrograma().diaKey;
+    const novoBlocoId = selBloco.value;
+    if (novoBlocoId === 'b5') {
+      retomadaResp.posicao = { blocoId: novoBlocoId, cicloId: 'forca', semanaCiclo: 1, diaKey: diaAtual };
+    } else {
+      const bloco = BLOCKS.find(b => b.id === novoBlocoId);
+      retomadaResp.posicao = { blocoId: novoBlocoId, semana: bloco.semanas[0], diaKey: diaAtual };
+    }
+    renderRetomadaConteudo();
+  });
+
+  const btnVoltarEtapa3b = el('#retomada-voltar-etapa3b');
+  if (btnVoltarEtapa3b) btnVoltarEtapa3b.addEventListener('click', () => {
+    retomadaView = 'etapa3';
+    renderRetomadaConteudo();
+  });
+
+  const btnVerResultado = el('#retomada-ver-resultado');
+  if (btnVerResultado) btnVerResultado.addEventListener('click', () => {
+    retomadaResp.posicao = lerPosicaoFormularioEtapa4();
+    retomadaResultadoAtual = calcularRecomendacaoRetomada(retomadaResp);
+    retomadaView = 'resultado';
+    renderRetomadaConteudo();
+  });
+
+  const btnVoltarEtapa4 = el('#retomada-voltar-etapa4');
+  if (btnVoltarEtapa4) btnVoltarEtapa4.addEventListener('click', () => {
+    retomadaView = 'etapa4';
+    renderRetomadaConteudo();
+  });
+
+  const btnMarcar = el('#retomada-marcar');
+  if (btnMarcar) btnMarcar.addEventListener('click', () => {
+    retomadasHistorico.unshift({
+      id: gerarId('retomada'),
+      data: new Date().toISOString(),
+      dias: retomadaResp.dias,
+      motivo: retomadaResp.motivo,
+      estado: retomadaResp.estado,
+      posicao: retomadaResp.posicao,
+      recomendacao: retomadaResultadoAtual,
+    });
+    if (retomadasHistorico.length > 50) retomadasHistorico.length = 50;
+    saveRetomadas();
+    retomadaView = 'inicio';
+    renderRetomadaConteudo();
+  });
+}
+
+function abrirRetomada() {
+  retomadaView = 'inicio';
+  renderRetomadaConteudo();
+  el('#retomada-sheet').classList.add('aberto');
+  el('#retomada-backdrop').classList.add('aberto');
+}
+function fecharRetomada() {
+  el('#retomada-sheet').classList.remove('aberto');
+  el('#retomada-backdrop').classList.remove('aberto');
+}
+
+/* ---------------------- wiring dos sheets ---------------------- */
+
 el('#btn-mais').addEventListener('click', abrirMais);
 el('#mais-fechar').addEventListener('click', fecharMais);
 el('#mais-backdrop').addEventListener('click', fecharMais);
 
-/* ---------------------- sheet de prévia/restauração de backup ---------------------- */
+el('#info-fechar').addEventListener('click', fecharInfo);
+el('#info-backdrop').addEventListener('click', fecharInfo);
+
+el('#peso-fechar').addEventListener('click', fecharPeso);
+el('#peso-backdrop').addEventListener('click', fecharPeso);
+
+el('#retomada-fechar').addEventListener('click', fecharRetomada);
+el('#retomada-backdrop').addEventListener('click', fecharRetomada);
+
+el('#backup-fechar').addEventListener('click', fecharBackup);
+el('#backup-backdrop').addEventListener('click', fecharBackup);
+
 el('#backup-previa-fechar').addEventListener('click', fecharPreviaBackup);
 el('#backup-previa-cancelar').addEventListener('click', fecharPreviaBackup);
 el('#backup-preview-backdrop').addEventListener('click', fecharPreviaBackup);
