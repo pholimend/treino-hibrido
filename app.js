@@ -5,6 +5,166 @@
 const STORAGE_KEY = 'treinohibrido.state.v1';
 const DONE_KEY = 'treinohibrido.done.v1';
 
+/* ---------------------- backup / restauração ---------------------- */
+/* Chaves reservadas para históricos futuros (peso, musculação, corrida) e
+   configurações — ainda não usadas pelo app, mas já incluídas no backup
+   para que essas funcionalidades possam ser adicionadas depois sem exigir
+   migração. */
+const CONFIG_KEY = 'treinohibrido.config.v1';
+const PESO_KEY = 'treinohibrido.pesocorporal.v1';
+const MUSC_KEY = 'treinohibrido.musculacao.v1';
+const CORRIDA_KEY = 'treinohibrido.corrida.v1';
+const LAST_BACKUP_KEY = 'treinohibrido.lastbackup.v1';
+const PRE_RESTORE_KEY = 'treinohibrido.prerestore.v1';
+const BACKUP_APP_ID = 'treino-hibrido';
+const SCHEMA_VERSION = 1;
+const SUPPORTED_SCHEMA_VERSIONS = [1];
+
+let pendingBackupImport = null;
+
+function safeParseJSON(raw, fallback) {
+  if (!raw) return fallback;
+  try { return JSON.parse(raw); } catch (e) { return fallback; }
+}
+
+/* Reúne TODO o estado persistente do app num único objeto de backup. */
+function coletarBackupData() {
+  return {
+    app: BACKUP_APP_ID,
+    schemaVersion: SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: {
+      programaAtual: JSON.parse(JSON.stringify(state)),
+      treinosConcluidos: Array.from(doneSet),
+      configuracoes: safeParseJSON(localStorage.getItem(CONFIG_KEY), {}),
+      pesoCorporal: safeParseJSON(localStorage.getItem(PESO_KEY), []),
+      musculacao: safeParseJSON(localStorage.getItem(MUSC_KEY), []),
+      corrida: safeParseJSON(localStorage.getItem(CORRIDA_KEY), []),
+    },
+  };
+}
+
+function formatarDataHora(iso) {
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return '—';
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+function textoUltimoBackup() {
+  const raw = localStorage.getItem(LAST_BACKUP_KEY);
+  if (!raw) return 'Último backup: Nenhum backup realizado';
+  return `Último backup: ${formatarDataHora(raw)}`;
+}
+
+function exportarBackup() {
+  const backup = coletarBackupData();
+  const json = JSON.stringify(backup, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const dataStr = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `treino-hibrido-backup-${dataStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
+  renderMais();
+}
+
+/* Valida a estrutura ANTES de qualquer alteração nos dados atuais. */
+function validarBackup(obj) {
+  if (!obj || typeof obj !== 'object') return 'Arquivo inválido.';
+  if (obj.app !== BACKUP_APP_ID) return 'Este arquivo não é um backup do Treino Híbrido.';
+  if (!SUPPORTED_SCHEMA_VERSIONS.includes(obj.schemaVersion)) return 'Versão de backup não reconhecida.';
+  if (!obj.data || typeof obj.data !== 'object') return 'Estrutura de dados do backup inválida.';
+  if (typeof obj.data.programaAtual !== 'object' || obj.data.programaAtual === null) return 'Backup incompleto: programa atual ausente.';
+  if (!Array.isArray(obj.data.treinosConcluidos)) return 'Backup incompleto: treinos concluídos ausentes.';
+  return null;
+}
+
+function labelProgramaAtual(programa) {
+  if (!programa || !programa.blocoId) return '—';
+  if (programa.blocoId === 'b5') {
+    const ciclo = (typeof b5Ciclo === 'function') ? b5Ciclo(programa.cicloId) : null;
+    const nomeCiclo = ciclo ? ciclo.nome : (programa.cicloId || '—');
+    const semanaLabel = programa.semanaCiclo === 7 ? 'Deload' : `Semana ${programa.semanaCiclo || '—'}`;
+    return `Bloco 5 · Ciclo ${nomeCiclo} · ${semanaLabel}`;
+  }
+  const bloco = (typeof BLOCKS !== 'undefined') ? BLOCKS.find(b => b.id === programa.blocoId) : null;
+  const nomeBloco = bloco ? `Bloco ${bloco.numero} · ${bloco.nome}` : programa.blocoId;
+  return `${nomeBloco} · Semana ${programa.semana || '—'}`;
+}
+
+function abrirPreviaBackup(obj) {
+  pendingBackupImport = obj;
+  const d = obj.data;
+  const linhas = [];
+  linhas.push(`<div class="stat-line"><span>Data do backup</span><b>${formatarDataHora(obj.exportedAt)}</b></div>`);
+  linhas.push(`<div class="stat-line"><span>Versão</span><b>${obj.schemaVersion}</b></div>`);
+  linhas.push(`<div class="stat-line"><span>Programa</span><b>${labelProgramaAtual(d.programaAtual)}</b></div>`);
+  linhas.push(`<div class="stat-line"><span>Treinos concluídos</span><b>${(d.treinosConcluidos || []).length}</b></div>`);
+  if (Array.isArray(d.pesoCorporal)) linhas.push(`<div class="stat-line"><span>Registros de peso</span><b>${d.pesoCorporal.length}</b></div>`);
+  if (Array.isArray(d.musculacao)) linhas.push(`<div class="stat-line"><span>Registros de musculação</span><b>${d.musculacao.length}</b></div>`);
+  if (Array.isArray(d.corrida)) linhas.push(`<div class="stat-line"><span>Registros de corrida</span><b>${d.corrida.length}</b></div>`);
+
+  el('#backup-previa-conteudo').innerHTML = `
+    <div class="ex-stats backup-previa-grid">${linhas.join('')}</div>
+    <div class="callout alerta">Restaurar substituirá todos os dados atuais do app por este backup. Um backup de segurança dos dados atuais é salvo automaticamente antes da restauração.</div>`;
+
+  el('#backup-preview-sheet').classList.add('aberto');
+  el('#backup-preview-backdrop').classList.add('aberto');
+}
+
+function fecharPreviaBackup() {
+  pendingBackupImport = null;
+  el('#backup-preview-sheet').classList.remove('aberto');
+  el('#backup-preview-backdrop').classList.remove('aberto');
+  const input = el('#input-importar-backup');
+  if (input) input.value = '';
+}
+
+function confirmarRestauracao() {
+  if (!pendingBackupImport) return;
+  try {
+    localStorage.setItem(PRE_RESTORE_KEY, JSON.stringify(coletarBackupData()));
+  } catch (e) {}
+
+  const d = pendingBackupImport.data;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(d.programaAtual || {}));
+  localStorage.setItem(DONE_KEY, JSON.stringify(d.treinosConcluidos || []));
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(d.configuracoes || {}));
+  localStorage.setItem(PESO_KEY, JSON.stringify(d.pesoCorporal || []));
+  localStorage.setItem(MUSC_KEY, JSON.stringify(d.musculacao || []));
+  localStorage.setItem(CORRIDA_KEY, JSON.stringify(d.corrida || []));
+
+  pendingBackupImport = null;
+  location.reload();
+}
+
+function lidarComArquivoImportado(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let obj;
+    try {
+      obj = JSON.parse(reader.result);
+    } catch (e) {
+      alert('Não foi possível ler o arquivo: JSON inválido.');
+      return;
+    }
+    const erro = validarBackup(obj);
+    if (erro) {
+      alert(erro);
+      return;
+    }
+    abrirPreviaBackup(obj);
+  };
+  reader.onerror = () => alert('Erro ao ler o arquivo selecionado.');
+  reader.readAsText(file);
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -332,7 +492,34 @@ function conteudoMais() {
     html: '<ol>' + MARCOS.map(m => `<li>${m}</li>`).join('') + '</ol>',
   });
 
+  sections.push({
+    titulo: 'Backup e dados',
+    html: `
+      <p id="backup-ultimo-texto" class="meta-mini">${textoUltimoBackup()}</p>
+      <div class="backup-botoes">
+        <button id="btn-exportar-backup" class="btn-backup">Exportar backup</button>
+        <button id="btn-importar-backup" class="btn-backup btn-backup-secundario">Importar backup</button>
+      </div>
+      <input type="file" id="input-importar-backup" accept="application/json,.json" style="display:none">
+      <p class="accordion-body" style="margin-top:10px;">O backup gera um arquivo .json com todo o progresso salvo no aparelho. Guarde-o para transferir os dados para outro celular ou recuperar o app.</p>
+    `,
+  });
+
   return sections;
+}
+
+function attachBackupHandlers() {
+  const btnExport = el('#btn-exportar-backup');
+  const btnImport = el('#btn-importar-backup');
+  const input = el('#input-importar-backup');
+  if (btnExport) btnExport.addEventListener('click', exportarBackup);
+  if (btnImport && input) btnImport.addEventListener('click', () => input.click());
+  if (input) {
+    input.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) lidarComArquivoImportado(file);
+    });
+  }
 }
 
 function renderMais() {
@@ -342,6 +529,7 @@ function renderMais() {
       <summary>${s.titulo}</summary>
       <div class="accordion-body">${s.html}</div>
     </details>`).join('');
+  attachBackupHandlers();
 }
 
 function abrirMais() {
@@ -356,6 +544,12 @@ function fecharMais() {
 el('#btn-mais').addEventListener('click', abrirMais);
 el('#mais-fechar').addEventListener('click', fecharMais);
 el('#mais-backdrop').addEventListener('click', fecharMais);
+
+/* ---------------------- sheet de prévia/restauração de backup ---------------------- */
+el('#backup-previa-fechar').addEventListener('click', fecharPreviaBackup);
+el('#backup-previa-cancelar').addEventListener('click', fecharPreviaBackup);
+el('#backup-preview-backdrop').addEventListener('click', fecharPreviaBackup);
+el('#backup-previa-restaurar').addEventListener('click', confirmarRestauracao);
 
 /* ---------------------- espaço reservado para a barra fixa inferior ---------------------- */
 /* Mede a altura real de .acoes (sem a safe-area, que é somada à parte na
